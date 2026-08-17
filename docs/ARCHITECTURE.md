@@ -32,8 +32,10 @@ flowchart TB
 
 Pure functions, no Qt dependencies — testable with `node`:
 
-- `parsePsLines(raw)` → containers: id, name, image, state, status.
-- `parseStatsLines(raw)` → map name → { cpuPct, memPct }.
+- `parsePsLines(raw)` → containers: id, name, image, state, status (docker
+  line-per-object and podman array schemas).
+- `parseStatsLines(raw)` → map name → { cpuPct, memPct } (docker string
+  percents, podman snake_case strings and numeric variants).
 - `mergeStats(containers, stats)` → joins stats (running containers only).
 - `stateGlyph(state)` / `stateColor(state, unhealthy)` → UI mapping.
 - `worstState(containers)` / `runningCount(containers)` / `dotColor(worst)`
@@ -44,23 +46,31 @@ Pure functions, no Qt dependencies — testable with `node`:
 ### 3. Data collection (inline snapshot script)
 
 One `Process` runs a snapshot (sectioned output — container names cannot
-contain `=`, so `==SECTION==` markers are unambiguous). `docker stats` is
-the expensive part (~2s) and is only run while the dropdown is open, where
-the percentages are visible; the poll timer and bar tooltip only need
-`ps` + daemon state:
+contain `=`, so `==SECTION==` markers are unambiguous). The script takes
+two arguments: the stats gate (`$1` = `stats`|`bare` — `stats` is the
+expensive part, ~2s, and only runs while the dropdown is open) and the
+runtime preference (`$2` = `docker`|`podman`|`auto`). It resolves the
+active runtime (auto = `docker info` succeeds, else `podman info`) and
+reports it in `==RUNTIME==` so actions hit the same engine:
 
 ```
-==PS==     docker ps -a --format '{{json .}}'          (always)
-==STATS==  docker stats --no-stream --format '{{json .}}'  (only when panel open, $1 = "stats")
-==DAEMON== docker info exit code (daemon reachability) (always)
+==RUNTIME==  resolved CLI: docker | podman (always)
+==PS==       <runtime> ps -a --format ... (always)
+==STATS==    <runtime> stats --no-stream --format ... (only when $1 = "stats")
+==DAEMON==   up | down — same resolution as the runtime check (always)
 ```
+
+Docker uses the `--format '{{json .}}'` line-per-object forms; podman uses
+`--format json` (arrays). `Model.js` normalizes both schemas.
 
 ### 4. Actions (one Process at a time)
 
-`docker start|stop|restart|pause|unpause <name>` — serialized via the
+`<runtime> start|stop|restart|pause|unpause <name>` — the runtime comes
+from the last snapshot's `==RUNTIME==` section, so an action always targets
+the engine the list was read from. Actions are serialized via the
 `actionBusy` flag (requests while busy are ignored); a non-zero exit sets a
-generic footer error (`lastError`) and the list is re-refreshed. Per-row
-spinner / error details are planned for v1.1.
+generic footer error (`lastError`) with the CLI's stderr and the list is
+re-refreshed. Per-row spinner / error details are planned for v1.1.
 
 ## Data flow for a toggle (example: restart)
 

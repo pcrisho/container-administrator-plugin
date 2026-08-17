@@ -16,24 +16,42 @@ function toPercent(value) {
   return isFinite(n) ? n : -1
 }
 
-// docker ps -a --format '{{json .}}' → one JSON object per line.
+// Normalize one container row from either CLI:
+//   docker: docker ps --format '{{json .}}'  → ID, Names (string), ...
+//   podman: podman ps --format json          → Id, Names (array), ...
+function psRow(d) {
+  var names = d.Names !== undefined ? d.Names : d.names
+  return {
+    id: String(d.ID || d.Id || "").slice(0, 12),
+    name: Array.isArray(names) ? String(names[0] || "") : String(names || ""),
+    image: shortImage(String(d.Image || "")),
+    state: String(d.State || "").toLowerCase(),
+    status: String(d.Status || ""),
+    unhealthy: String(d.Status || "").indexOf("unhealthy") >= 0,
+    cpuPct: -1,
+    memPct: -1
+  }
+}
+
+// docker ps --format '{{json .}}' → one JSON object per line.
+// podman ps --format json → a single JSON array.
 function parsePsLines(raw) {
   var containers = []
-  String(raw || "").split("\n").forEach(function(line) {
+  var text = String(raw || "").trim()
+  if (text.charAt(0) === "[") {
+    try {
+      var arr = JSON.parse(text)
+      for (var i = 0; i < arr.length; i++) containers.push(psRow(arr[i]))
+    } catch (e) {
+      // malformed array
+    }
+    return containers
+  }
+  text.split("\n").forEach(function(line) {
     line = line.trim()
     if (!line) return
     try {
-      var d = JSON.parse(line)
-      containers.push({
-        id: String(d.ID || "").slice(0, 12),
-        name: String(d.Names || ""),
-        image: shortImage(String(d.Image || "")),
-        state: String(d.State || "").toLowerCase(),
-        status: String(d.Status || ""),
-        unhealthy: String(d.Status || "").indexOf("unhealthy") >= 0,
-        cpuPct: -1,
-        memPct: -1
-      })
+      containers.push(psRow(JSON.parse(line)))
     } catch (e) {
       // skip malformed line
     }
@@ -41,18 +59,45 @@ function parsePsLines(raw) {
   return containers
 }
 
-// docker stats --no-stream --format '{{json .}}' → name -> { cpuPct, memPct }.
+// Normalize one stats row across the CLI output variants:
+//   docker stats {{json .}}  → { Name, CPUPerc: "1.23%", MemPerc: "0.32%" }
+//   podman stats --format json → { name, cpu_percent: "0.09%", mem_percent: "0.01%" }
+//   podman stats {{json .}}  → { Name, CPU: 1.79, MemPerc: 0.0018 (0..1 fraction) }
+function statsRow(d) {
+  var name = d.Name !== undefined ? d.Name : d.name
+  var cpu = d.CPUPerc !== undefined ? d.CPUPerc : (d.CPU !== undefined ? d.CPU : d.cpu_percent)
+  var mem = d.MemPerc !== undefined ? d.MemPerc : d.mem_percent
+  return {
+    cpuPct: typeof cpu === "number" ? cpu : toPercent(cpu),
+    memPct: typeof mem === "number" ? mem * 100 : toPercent(mem)
+  }
+}
+
+// docker stats --no-stream --format '{{json .}}' → one object per line,
+// percentages as "1.23%" strings.
+// podman stats --no-stream --format json → a single JSON array.
 function parseStatsLines(raw) {
   var stats = {}
+  var text = String(raw || "").trim()
+  if (text.charAt(0) === "[") {
+    try {
+      var arr = JSON.parse(text)
+      for (var i = 0; i < arr.length; i++) {
+        var row = statsRow(arr[i])
+        stats[String(arr[i].Name !== undefined ? arr[i].Name : arr[i].name || "")] = row
+      }
+    } catch (e) {
+      // malformed array
+    }
+    return stats
+  }
   String(raw || "").split("\n").forEach(function(line) {
     line = line.trim()
     if (!line) return
     try {
       var d = JSON.parse(line)
-      stats[String(d.Name || "")] = {
-        cpuPct: toPercent(d.CPUPerc),
-        memPct: toPercent(d.MemPerc)
-      }
+      var row = statsRow(d)
+      if (row.cpuPct >= 0 || row.memPct >= 0) stats[String(d.Name || "")] = row
     } catch (e) {
       // skip malformed line
     }
@@ -83,7 +128,7 @@ function mergeStats(containers, stats) {
 function stateGlyph(state) {
   if (state === "running") return "●"
   if (state === "paused") return "◫"
-  if (state === "restarting") return "↻"
+  if (state === "restarting" || state === "stopping") return "↻"
   if (state === "exited") return "○"
   if (state === "dead") return "✕"
   if (state === "created") return "◌"
@@ -107,7 +152,7 @@ function worstState(containers) {
   }
   for (var j = 0; j < containers.length; j++) {
     var s = containers[j].state
-    if (s === "paused" || s === "restarting") return "warn"
+    if (s === "paused" || s === "restarting" || s === "stopping") return "warn"
   }
   return "good"
 }

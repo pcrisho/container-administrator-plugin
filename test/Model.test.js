@@ -39,6 +39,43 @@ const stats = M.parseStatsLines(statsRaw)
 assert.strictEqual(stats.web.cpuPct, 2.5)
 assert.strictEqual(stats.web.memPct, 12.34)
 
+// --- podman ps (single JSON array, Id + Names as array) ---
+const podmanPsRaw = JSON.stringify([
+  { Id: "aaa111bbb222ccc333ddd444eee555fff666777888999000aaa111bbb222", Names: ["web"], Image: "docker.io/library/nginx:latest", State: "running", Status: "Up 2 minutes" },
+  { Id: "bbb222ccc333ddd444eee555fff666777888999000aaa111bbb222ccc333", Names: ["db"], Image: "docker.io/library/postgres:16", State: "exited", Status: "Exited (0) 1 minute ago" }
+])
+const podmanContainers = M.parsePsLines(podmanPsRaw)
+assert.strictEqual(podmanContainers.length, 2, "podman array parsed")
+assert.strictEqual(podmanContainers[0].id, "aaa111bbb222")
+assert.strictEqual(podmanContainers[0].name, "web")
+assert.strictEqual(podmanContainers[0].image, "nginx")
+assert.strictEqual(podmanContainers[0].state, "running")
+assert.strictEqual(podmanContainers[1].state, "exited")
+
+// --- podman stats (array, snake_case string percents — podman 6.1) ---
+const podmanStatsRaw = JSON.stringify([
+  { id: "108beef3e68f", name: "web", cpu_percent: "0.09%", mem_percent: "0.01%", mem_usage: "1.52MB / 16.28GB" },
+  { id: "zzz", name: "other", cpu_percent: "0.00%", mem_percent: "0.00%" }
+])
+const podmanStats = M.parseStatsLines(podmanStatsRaw)
+assert.strictEqual(podmanStats.web.cpuPct, 0.09, "podman snake_case cpu_percent")
+assert.strictEqual(podmanStats.web.memPct, 0.01, "podman snake_case mem_percent")
+const mergedPodman = M.mergeStats(podmanContainers, podmanStats)
+assert.strictEqual(mergedPodman[0].cpuPct, 0.09, "podman stats merged")
+assert.strictEqual(mergedPodman[1].cpuPct, -1, "stopped podman container has no stats")
+
+// --- podman stats (array, numeric fields: CPU percent number, MemPerc fraction) ---
+const podmanStatsNumericRaw = JSON.stringify([
+  { ContainerID: "aaa111bbb222", Name: "web", CPU: 1.79, MemPerc: 0.001786 }
+])
+const podmanStatsNumeric = M.parseStatsLines(podmanStatsNumericRaw)
+assert.strictEqual(podmanStatsNumeric.web.cpuPct, 1.79, "podman numeric CPU is a percent")
+assert.ok(Math.abs(podmanStatsNumeric.web.memPct - 0.1786) < 0.0001, "podman MemPerc fraction x100")
+
+// --- podman state glyphs ---
+assert.strictEqual(M.stateGlyph("stopping"), "↻")
+assert.strictEqual(M.worstState([{ state: "stopping" }]), "warn")
+
 // --- mergeStats (stats only for running) ---
 const merged = M.mergeStats(containers, stats)
 assert.strictEqual(merged[0].cpuPct, 2.5, "running container gets stats")

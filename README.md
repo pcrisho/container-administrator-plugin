@@ -1,20 +1,22 @@
 # Container Administrator
 
-Omarchy topbar widget to monitor and manage **Docker** containers: status,
-live CPU/memory usage, and start / stop / restart / pause / unpause actions
-from a dropdown panel.
+Omarchy topbar widget to monitor and manage **Docker and Podman**
+containers: status, live CPU/memory usage, and start / stop / restart /
+pause / unpause actions from a dropdown panel.
 
 ## Features
 
 - **Bar icon** `󰆳` with a status dot: green = all running, yellow =
-  paused/restarting, red = exited/dead/unhealthy, gray = daemon down.
-  Tooltip shows the running count (e.g. `3/5 running`).
+  paused/restarting/stopping, red = exited/dead/unhealthy, gray = runtime
+  down. Tooltip shows the running count (e.g. `3/5 running`).
 - **Dropdown panel** (left click / right click on the icon): container list
   with state glyphs, image, CPU% · mem%, and per-row action buttons.
 - **Actions**: Start, Stop, Restart (plus pause/unpause via
   `omarchy-shell pcrisho.container-admin action <name> pause`).
-- **Daemon-down state**: when `docker` is unreachable the panel says so —
-  no silent empty list.
+- **Daemon-down state**: when the container runtime is unreachable the
+  panel says so — no silent empty list.
+- **Runtime auto-detection**: prefers Docker and falls back to Podman when
+  the Docker daemon is unreachable; override with the `runtime` setting.
 - **Auto refresh**: on open + poll (default 10s, configurable 5–300s);
   manual refresh with `r` or middle click. `docker stats` (the expensive
   part) runs only while the panel is open.
@@ -22,7 +24,7 @@ from a dropdown panel.
 ## Requirements
 
 - Omarchy 4.0.0+ (Quattro shell)
-- Docker CLI (`docker`) with the daemon running
+- Docker CLI (`docker`) with the daemon running, or Podman (`podman`)
 - `jq` (used by `install.sh` to verify the plugin was discovered)
 - Your user in the `docker` group (no sudo needed):
   `sudo usermod -aG docker $USER` + re-login
@@ -56,11 +58,12 @@ omarchy-shell shell rescanPlugins
 
 ## Configuration
 
-Omarchy plugin settings UI → `pollIntervalSec` (default 10, min 5, max 300),
-or set it directly in `shell.json`:
+Omarchy plugin settings UI → `pollIntervalSec` (default 10, min 5, max 300)
+and `runtime` (Auto | Docker | Podman, default Auto), or set them directly
+in `shell.json`:
 
 ```json
-{ "id": "pcrisho.container-admin", "pollIntervalSec": 10 }
+{ "id": "pcrisho.container-admin", "pollIntervalSec": 10, "runtime": "Auto" }
 ```
 
 ## IPC
@@ -84,9 +87,8 @@ omarchy-shell pcrisho.container-admin action web restart
 
 - `Panel.qml` — bar widget + dropdown UI; runs one `Process` per job
   (snapshot, actions).
-- `Model.js` — pure, node-testable parsers (`docker ps --format '{{json .}}'`,
-  `docker stats --no-stream`, daemon check). Run the tests:
-  `node test/Model.test.js`.
+- `Model.js` — pure, node-testable parsers (docker/podman `ps` and `stats`
+  JSON, runtime check). Run the tests: `node test/Model.test.js`.
 - `install.sh` — copies the plugin, rescans, enables.
 
 Details: [docs/PRD.md](docs/PRD.md) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
@@ -98,7 +100,8 @@ Details: [docs/PRD.md](docs/PRD.md) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.
 - v1 shows per-container CPU/mem percentages only (byte-precise usage
   parsing is planned).
 - Pause/unpause are not exposed as buttons (rarely used); use IPC.
-- Podman support is on the roadmap, after Docker is solid.
+- Podman requires podman ≥ 4 (JSON output formats differ across versions;
+  tested against 6.1).
 
 ## License
 

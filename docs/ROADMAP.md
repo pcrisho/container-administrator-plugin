@@ -13,6 +13,18 @@
 - [x] Live validation with real containers (loads clean, no QML errors; IPC
       state/refresh/action validated against real containers)
 
+## v1.2 (shipped)
+
+- [x] **Podman support** — runtime auto-detection (`runtime` setting:
+      Auto | Docker | Podman):
+  - Auto prefers `docker` and falls back to `podman` when the docker
+    daemon is unreachable
+  - Podman's JSON schemas differ per subcommand (`ps --format json` is a
+    PascalCase array, `stats --format json` is snake_case with string
+    percents, `{{json .}}` yields numeric fields) — `Model.js` normalizes
+    all of them (validated against podman 6.1)
+  - Same actions (`podman start/stop/restart/pause/unpause`)
+
 ## v1.1 (planned)
 
 - [ ] Log viewer per container (`docker logs --tail N`, timestamps)
@@ -24,12 +36,6 @@
 
 ## Tier 3 (later)
 
-- [ ] **Podman support** — when Docker is solid:
-  - Detect `podman` CLI; reuse the same snapshot script
-    (`podman ps --format json` etc. — compatible output)
-  - `podman stats --no-stream` (same template support)
-  - Option: prefer `docker` when both are present (user's runtime today)
-  - `podman-docker` alias as fallback (unverified for `stats`)
 - [ ] Compose project grouping with collapsible headers
 - [ ] RAM limit slider (`docker update --memory --memory-swap -1`, devgtv
       pattern: pending-set queue + optimistic preview)
@@ -46,6 +52,8 @@
 | 3 | Data layer: inline bash snapshot + pure JS parsers (node-testable) instead of a Python helper | Kept |
 | 4 | Single `Process` per job (snapshot, actions) — serialized queue | Kept |
 | 5 | Bars show a daemon state dot; dropdown holds the detail | Kept |
+| 6 | Runtime resolution in the snapshot script (auto = prefer docker, fall back to podman), reported via `==RUNTIME==` so actions always use the live runtime | Kept |
+| 7 | Normalize podman's divergent JSON schemas in `Model.js` instead of requiring jq at runtime | Kept |
 
 ## Known upstream issues (shell, not this repo)
 

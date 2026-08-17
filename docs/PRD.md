@@ -1,6 +1,7 @@
 # PRD — Container Administrator (`pcrisho.container-admin`)
 
-Omarchy topbar widget to monitor and manage **Docker** containers.
+Omarchy topbar widget to monitor and manage **Docker and Podman**
+containers.
 
 ## Goal
 
@@ -25,9 +26,9 @@ desktop shell.
   row to select; click the action button in the row.
 - **Actions** (per container, via CLI): `start`, `stop`, `restart`,
   `pause`, `unpause`.
-- **Daemon-down state**: if the Docker CLI errors, the panel shows a clear
-  "Docker daemon unavailable" message (instead of a silent empty list) and
-  the bar dot turns gray.
+- **Daemon-down state**: if the container runtime errors, the panel shows a
+  clear "Container runtime unavailable" message (instead of a silent empty
+  list) and the bar dot turns gray.
 - **Refresh**: on open + periodic poll (default 10s, configurable
   `pollIntervalSec`, 5–300s). Manual refresh with `r` / middle click.
 
@@ -37,11 +38,11 @@ desktop shell.
 |---|---|---|
 | **1 — Core (v1)** | Status + live stats (CPU/mem %), actions start/stop/restart/pause/unpause, daemon-down state, poll + manual refresh, dropdown UX, IPC | Shipped |
 | **2 — High value (v1.1)** | Log viewer per container, desktop notifications on state changes (stopped/unhealthy/started) | Planned |
-| **3 — Roadmap** | Compose project grouping, RAM limit slider (`docker update`), search/filter, images/volumes/networks views, **Podman support** | Later |
+| **3 — Runtime support** | **Docker + Podman**, runtime auto-detection (Docker preferred, Podman fallback) with an explicit `runtime` override | Shipped |
+| **4 — Roadmap** | Compose project grouping, RAM limit slider (`docker update`), search/filter, images/volumes/networks views | Later |
 
 ## Non-goals (v1)
 
-- Podman (after Docker is solid — see ROADMAP).
 - Container creation/removal, image management, volumes/networks.
 - Logs and notifications (v1.1).
 
@@ -59,7 +60,7 @@ desktop shell.
 - Omarchy 4.0.0 (Quattro shell): `schemaVersion: 1` manifest, `Panel` +
   `BarIconButton` + `KeyboardPanel` components (same as
   `pcrisho.power-admin`).
-- Docker CLI via `Quickshell.Io.Process`; the user runs in the `docker`
-  group (no sudo needed).
+- Docker and Podman CLI via `Quickshell.Io.Process`; the user runs in the
+  `docker` group or a rootless podman setup (no sudo needed).
 - Security: the plugin executes unsandboxed; `docker` CLI access equals root
   access on the daemon. Standard third-party-plugin caveat.

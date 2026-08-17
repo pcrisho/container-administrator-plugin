@@ -19,7 +19,12 @@ Panel {
   property bool actionBusy: false
   property bool loading: false
   property string lastError: ""
+  property string runtimeBin: ""
   property int selectedIndex: 0
+
+  // "auto" | "docker" | "podman" — from the runtime setting; auto prefers
+  // docker and falls back to podman when the docker daemon is unreachable.
+  readonly property string runtimeSetting: String(setting("runtime", "Auto") || "Auto").toLowerCase()
 
   // Not readonly: the shell pushes settings updates live, so the poll
   // interval must react to changes without a restart.
@@ -28,18 +33,44 @@ Panel {
   readonly property string worstDot: root.daemonUp ? Model.worstState(root.containers) : "none"
 
   // One Process per job; the snapshot script sections its output so a single
-  // run yields the ps list, the stats map and daemon reachability. The stats
-  // section runs only when $1 = "stats" (panel open): `docker stats` is the
-  // expensive part (~2s), and the bar icon/tooltip only need ps + daemon.
+  // run yields the runtime in use, the ps list, the stats map and daemon
+  // reachability. Args: $1 = "stats"|"bare" (docker stats is the expensive
+  // part, ~2s, only needed while the panel is open), $2 = runtime preference
+  // ("docker"|"podman"|anything else = auto). Auto prefers docker and falls
+  // back to podman when the docker daemon is unreachable.
   readonly property string snapshotScript: [
+    "RUNTIME=\"\"",
+    "if [ \"$2\" = \"docker\" ] || [ \"$2\" = \"podman\" ]; then",
+    "  if command -v \"$2\" >/dev/null 2>&1 && \"$2\" info >/dev/null 2>&1; then RUNTIME=\"$2\"; fi",
+    "else",
+    "  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then RUNTIME=docker",
+    "  elif command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then RUNTIME=podman",
+    "  fi",
+    "fi",
+    "echo '==RUNTIME=='",
+    "echo \"$RUNTIME\"",
+    "if [ -z \"$RUNTIME\" ]; then",
+    "  echo '==PS=='",
+    "  echo '==DAEMON=='",
+    "  echo down",
+    "  exit 0",
+    "fi",
     "echo '==PS=='",
-    "docker ps -a --format '{{json .}}' 2>/dev/null",
+    "if [ \"$RUNTIME\" = \"podman\" ]; then",
+    "  podman ps -a --format json 2>/dev/null",
+    "else",
+    "  docker ps -a --format '{{json .}}' 2>/dev/null",
+    "fi",
     "if [ \"$1\" = \"stats\" ]; then",
     "  echo '==STATS=='",
-    "  docker stats --no-stream --format '{{json .}}' 2>/dev/null",
+    "  if [ \"$RUNTIME\" = \"podman\" ]; then",
+    "    podman stats --no-stream --format json 2>/dev/null",
+    "  else",
+    "    docker stats --no-stream --format '{{json .}}' 2>/dev/null",
+    "  fi",
     "fi",
     "echo '==DAEMON=='",
-    "docker info >/dev/null 2>&1 && echo up || echo down"
+    "echo up"
   ].join("\n")
 
   function refresh() {
@@ -47,8 +78,8 @@ Panel {
     root.loading = true
     // docker stats is only needed while the panel is open, where the
     // CPU/mem percentages are actually visible. The leading "cap-snapshot"
-    // is the script's $0 (sh -c <script> <arg> binds the arg to $1).
-    snapshotProc.command = ["sh", "-c", root.snapshotScript, "cap-snapshot", root.opened ? "stats" : "bare"]
+    // is the script's $0 (sh -c <script> <arg> binds the first arg to $1).
+    snapshotProc.command = ["sh", "-c", root.snapshotScript, "cap-snapshot", root.opened ? "stats" : "bare", root.runtimeSetting]
     if (!snapshotProc.running) snapshotProc.running = true
   }
 
@@ -57,8 +88,9 @@ Panel {
     function section(name) {
       var parts = text.split("==" + name + "==")
       if (parts.length < 2) return ""
-      return parts[1].split("==PS==")[0].split("==STATS==")[0].split("==DAEMON==")[0]
+      return parts[1].split("==PS==")[0].split("==STATS==")[0].split("==DAEMON==")[0].split("==RUNTIME==")[0]
     }
+    root.runtimeBin = section("RUNTIME").trim()
     var ps = Model.parsePsLines(section("PS"))
     var stats = Model.parseStatsLines(section("STATS"))
     root.containers = Model.mergeStats(ps, stats)
@@ -68,10 +100,10 @@ Panel {
   }
 
   function runAction(name, action) {
-    if (root.actionBusy || !root.daemonUp) return
+    if (root.actionBusy || !root.daemonUp || root.runtimeBin === "") return
     root.actionBusy = true
     root.lastError = ""
-    actionProc.command = ["docker", action, name]
+    actionProc.command = [root.runtimeBin, action, name]
     actionProc.running = true
   }
 
@@ -166,7 +198,7 @@ Panel {
       text: "󰆳"
       slotSize: Style.bar.iconSlot
       tooltipText: {
-        if (!root.daemonUp) return "Docker daemon unavailable"
+        if (!root.daemonUp) return "Container runtime unavailable"
         return root.containers.length === 0
           ? "No containers"
           : root.runningTotal + "/" + root.containers.length + " running"
@@ -260,7 +292,7 @@ Panel {
         Text {
           width: parent.width
           visible: !root.daemonUp
-          text: "Docker daemon unavailable — is the docker service running?"
+          text: "Container runtime unavailable — is Docker or Podman installed and running?"
           color: Color.urgent
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.bodySmall

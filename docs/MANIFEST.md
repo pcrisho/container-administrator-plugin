@@ -22,7 +22,8 @@ Validated against Omarchy 4.0.0 (`omarchy plugin validate` → exit 0).
     "defaultSection": "right",
     "allowMultiple": false,
     "defaults": {
-      "pollIntervalSec": 10
+      "pollIntervalSec": 10,
+      "runtime": "Auto"
     },
     "schema": [
       {
@@ -33,6 +34,18 @@ Validated against Omarchy 4.0.0 (`omarchy plugin validate` → exit 0).
         "max": 300,
         "step": 5,
         "defaultValue": 10
+      },
+      {
+        "key": "runtime",
+        "type": "enum",
+        "label": "Container runtime",
+        "options": [
+          "Auto",
+          "Docker",
+          "Podman"
+        ],
+        "defaultValue": "Auto",
+        "description": "Auto prefers Docker and falls back to Podman when the Docker daemon is unreachable."
       }
     ]
   }
@@ -47,7 +60,8 @@ Validated against Omarchy 4.0.0 (`omarchy plugin validate` → exit 0).
   (`{ "id": "pcrisho.container-admin", "pollIntervalSec": 10 }`).
 - The widget reads them via the `settings`/`setting()` helpers provided by
   the shell (`Panel.setting(key, default)`), with validation/clamping in
-  `Model.js` (`clampPollInterval`).
+  `Model.js` (`clampPollInterval`). `runtime` accepts `Auto` | `Docker` |
+  `Podman` (case-insensitive on read).
 - v1.1 will extend the schema with `showStoppedContainers`,
   `notificationsEnabled`, `logLines` (pattern borrowed from
   `djjeane.docker-monitor`).
