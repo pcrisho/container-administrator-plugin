@@ -16,6 +16,42 @@ function toPercent(value) {
   return isFinite(n) ? n : -1
 }
 
+// docker Labels: "com.docker.compose.project=webapp,maintainer=me" — values
+// containing commas are quoted ("a=x,y"). podman Labels: a plain object.
+function parseLabels(labels) {
+  var out = {}
+  var s = String(labels || "")
+  var i = 0
+  var len = s.length
+  while (i < len) {
+    while (i < len && s.charAt(i) === ",") i++
+    if (i >= len) break
+    var eq = s.indexOf("=", i)
+    if (eq < 0) break
+    var key = s.slice(i, eq)
+    i = eq + 1
+    var value = ""
+    if (i < len && s.charAt(i) === '"') {
+      var close = s.indexOf('"', i + 1)
+      value = s.slice(i + 1, close < 0 ? len : close)
+      i = close < 0 ? len : close + 1
+    } else {
+      var comma = s.indexOf(",", i)
+      value = s.slice(i, comma < 0 ? len : comma)
+      i = comma < 0 ? len : comma + 1
+    }
+    out[key] = value
+  }
+  return out
+}
+
+function composeProject(labels) {
+  if (labels && typeof labels === "object") {
+    return String(labels["com.docker.compose.project"] || "")
+  }
+  return parseLabels(labels)["com.docker.compose.project"] || ""
+}
+
 // Normalize one container row from either CLI:
 //   docker: docker ps --format '{{json .}}'  → ID, Names (string), ...
 //   podman: podman ps --format json          → Id, Names (array), ...
@@ -28,6 +64,7 @@ function psRow(d) {
     state: String(d.State || "").toLowerCase(),
     status: String(d.Status || ""),
     unhealthy: String(d.Status || "").indexOf("unhealthy") >= 0,
+    project: composeProject(d.Labels),
     cpuPct: -1,
     memPct: -1
   }
@@ -125,10 +162,34 @@ function mergeStats(containers, stats) {
   return out
 }
 
+// Split the flat container list into compose-project groups (alphabetical)
+// with any ungrouped containers last under project "". Each entry carries a
+// flatIndex so the UI can keep a single selection cursor over the flat list.
+function groupByProject(containers) {
+  var groups = {}
+  var ungrouped = []
+  for (var i = 0; i < containers.length; i++) {
+    var c = containers[i]
+    var copy = {}
+    for (var k in c) copy[k] = c[k]
+    copy.flatIndex = i
+    if (c.project) {
+      (groups[c.project] = groups[c.project] || []).push(copy)
+    } else {
+      ungrouped.push(copy)
+    }
+  }
+  var out = Object.keys(groups).sort().map(function(p) {
+    return { project: p, containers: groups[p] }
+  })
+  if (ungrouped.length) out.push({ project: "", containers: ungrouped })
+  return out
+}
+
 function stateGlyph(state) {
   if (state === "running") return "●"
   if (state === "paused") return "◫"
-  if (state === "restarting" || state === "stopping") return "↻"
+  if (state === "restarting" || state === "stopping") return "󰀘"
   if (state === "exited") return "○"
   if (state === "dead") return "✕"
   if (state === "created") return "◌"
@@ -186,6 +247,7 @@ if (typeof module !== "undefined") {
     parsePsLines: parsePsLines,
     parseStatsLines: parseStatsLines,
     mergeStats: mergeStats,
+    groupByProject: groupByProject,
     stateGlyph: stateGlyph,
     stateColor: stateColor,
     worstState: worstState,

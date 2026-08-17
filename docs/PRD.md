@@ -39,7 +39,8 @@ desktop shell.
 | **1 — Core (v1)** | Status + live stats (CPU/mem %), actions start/stop/restart/pause/unpause, daemon-down state, poll + manual refresh, dropdown UX, IPC | Shipped |
 | **2 — High value (v1.1)** | Log viewer per container, desktop notifications on state changes (stopped/unhealthy/started) | Planned |
 | **3 — Runtime support** | **Docker + Podman**, runtime auto-detection (Docker preferred, Podman fallback) with an explicit `runtime` override | Shipped |
-| **4 — Roadmap** | Compose project grouping, RAM limit slider (`docker update`), search/filter, images/volumes/networks views | Later |
+| **4 — Scale & feedback** | Compose-project accordion grouping with scroll, in-flight action spinner | Shipped |
+| **5 — Roadmap** | RAM limit slider (`docker update`), search/filter, images/volumes/networks views | Later |
 
 ## Non-goals (v1)
 

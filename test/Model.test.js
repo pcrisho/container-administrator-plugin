@@ -73,8 +73,29 @@ assert.strictEqual(podmanStatsNumeric.web.cpuPct, 1.79, "podman numeric CPU is a
 assert.ok(Math.abs(podmanStatsNumeric.web.memPct - 0.1786) < 0.0001, "podman MemPerc fraction x100")
 
 // --- podman state glyphs ---
-assert.strictEqual(M.stateGlyph("stopping"), "↻")
+assert.strictEqual(M.stateGlyph("stopping"), "󰀘")
 assert.strictEqual(M.worstState([{ state: "stopping" }]), "warn")
+
+// --- compose project from docker label strings and podman label objects ---
+const withLabels = M.parsePsLines('{"ID":"x","Names":"api","Image":"a","State":"running","Labels":"com.docker.compose.project=webapp,maintainer=me"}')
+assert.strictEqual(withLabels[0].project, "webapp")
+const quotedLabels = M.parsePsLines('{"ID":"y","Names":"db","Image":"a","State":"running","Labels":"a=\\"x,y\\",com.docker.compose.project=webapp"}')
+assert.strictEqual(quotedLabels[0].project, "webapp")
+const podmanLabels = M.parsePsLines(JSON.stringify([{ Id: "z", Names: ["worker"], Image: "a", State: "running", Labels: { "com.docker.compose.project": "jobs", "owner": "me" } }]))
+assert.strictEqual(podmanLabels[0].project, "jobs")
+
+// --- groupByProject ---
+const groups = M.groupByProject(containers.concat(withLabels, quotedLabels, podmanLabels))
+assert.strictEqual(groups.length, 3, "two projects + ungrouped bucket")
+assert.strictEqual(groups[0].project, "jobs", "projects alphabetical")
+assert.strictEqual(groups[0].containers.length, 1)
+assert.strictEqual(groups[1].project, "webapp")
+assert.strictEqual(groups[1].containers.length, 2, "api and db are webapp")
+assert.strictEqual(groups[2].project, "", "ungrouped last")
+assert.strictEqual(groups[2].containers.length, 2, "web and db have no project")
+assert.strictEqual(groups[2].containers[0].flatIndex, 0, "flatIndex preserved")
+assert.strictEqual(groups[1].containers[0].flatIndex, 2)
+assert.deepStrictEqual(M.groupByProject([]), [], "empty input")
 
 // --- mergeStats (stats only for running) ---
 const merged = M.mergeStats(containers, stats)
@@ -84,6 +105,7 @@ assert.strictEqual(merged[1].cpuPct, -1, "stopped container has no stats")
 // --- state mapping ---
 assert.strictEqual(M.stateGlyph("running"), "●")
 assert.strictEqual(M.stateGlyph("exited"), "○")
+assert.strictEqual(M.stateGlyph("restarting"), "󰀘")
 assert.strictEqual(M.stateColor("running", false), "#22c55e")
 assert.strictEqual(M.stateColor("running", true), "#ef4444")
 

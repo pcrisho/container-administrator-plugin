@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -21,6 +22,15 @@ Panel {
   property string lastError: ""
   property string runtimeBin: ""
   property int selectedIndex: 0
+  // Accordion state: project -> true when expanded. Missing = collapsed,
+  // so the panel opens compact and the user expands the projects it needs.
+  property var expanded: ({})
+  // Container name whose action is in flight (one action at a time).
+  property string pendingActionName: ""
+
+  // Grouped view of root.containers (compose project, ungrouped last);
+  // each entry carries flatIndex for the single selection cursor.
+  property var projectGroups: Model.groupByProject(root.containers)
 
   // "auto" | "docker" | "podman" — from the runtime setting; auto prefers
   // docker and falls back to podman when the docker daemon is unreachable.
@@ -102,17 +112,32 @@ Panel {
   function runAction(name, action) {
     if (root.actionBusy || !root.daemonUp || root.runtimeBin === "") return
     root.actionBusy = true
+    root.pendingActionName = name
     root.lastError = ""
     actionProc.command = [root.runtimeBin, action, name]
     actionProc.running = true
   }
 
+  function toggleGroup(project) {
+    if (root.expanded[project]) delete root.expanded[project]
+    else root.expanded[project] = true
+  }
+
+  function isRowVisible(flatIndex) {
+    var c = root.containers[flatIndex]
+    if (!c) return false
+    return root.expanded[c.project] === true
+  }
+
+  // j/k walk only rows inside expanded groups.
   function moveCursor(delta) {
     if (root.containers.length === 0) return
-    var next = root.selectedIndex + delta
-    if (next < 0) next = 0
-    if (next > root.containers.length - 1) next = root.containers.length - 1
-    root.selectedIndex = next
+    var n = root.containers.length
+    for (var i = 1; i <= n; i++) {
+      var idx = root.selectedIndex + delta * i
+      if (idx < 0 || idx >= n) continue
+      if (root.isRowVisible(idx)) { root.selectedIndex = idx; return }
+    }
   }
 
   function clampCursor() {
@@ -120,8 +145,33 @@ Panel {
       root.selectedIndex = 0
       return
     }
-    if (root.selectedIndex > root.containers.length - 1) root.selectedIndex = root.containers.length - 1
-    if (root.selectedIndex < 0) root.selectedIndex = 0
+    if (root.isRowVisible(root.selectedIndex)) return
+    for (var i = 0; i < root.containers.length; i++) {
+      if (root.isRowVisible(i)) { root.selectedIndex = i; return }
+    }
+    root.selectedIndex = -1
+  }
+
+  // Keep the keyboard-selected row inside the ScrollView viewport (pattern
+  // from the audio panel: j/k must not walk the selection off-screen).
+  function ensureCursorVisible(item) {
+    if (!item || !containerScroll) return
+    var flick = containerScroll.contentItem
+    if (!flick || flick.contentY === undefined) return
+    var margin = Style.space(6)
+    var maxY = Math.max(0, (flick.contentHeight || 0) - flick.height)
+    if (maxY <= Style.space(24)) {
+      flick.contentY = 0
+      return
+    }
+    var pt = item.mapToItem(flick.contentItem || flick, 0, 0)
+    var top = pt.y
+    var bottom = top + (item.height || 0)
+    var viewTop = flick.contentY
+    var viewBottom = viewTop + flick.height
+    if (top < viewTop + margin) flick.contentY = Math.max(0, Math.min(maxY, top - margin))
+    else if (bottom > viewBottom - margin)
+      flick.contentY = Math.max(0, Math.min(maxY, bottom + margin - flick.height))
   }
 
   function selectedAction() {
@@ -163,13 +213,14 @@ Panel {
     // so actionStderr is populated when onExited runs.
     stderr: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.actionStderr = String(text || "").trim()
+      onStreamFinished: actionProc.actionStderr = String(text || "").trim()
     }
     onExited: {
       root.actionBusy = false
-      root.lastError = root.actionStderr !== ""
-        ? root.actionStderr
-        : (exitCode !== 0 ? "docker command failed" : "")
+      root.pendingActionName = ""
+      root.lastError = actionProc.actionStderr !== ""
+        ? actionProc.actionStderr
+        : (exitCode !== 0 ? "container command failed" : "")
       root.refresh()
     }
   }
@@ -230,7 +281,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight)
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(560))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -245,11 +296,21 @@ Panel {
         else if (event.key === Qt.Key_R) { root.refresh(); event.accepted = true }
       }
 
+      ScrollView {
+        id: containerScroll
+        anchors.fill: parent
+        clip: true
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: column.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+        Binding {
+          target: containerScroll.contentItem
+          property: "interactive"
+          value: column.implicitHeight > containerScroll.height
+        }
+
       Column {
         id: column
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        width: parent.width
         spacing: Style.space(10)
 
         // ---------- Header ----------
@@ -299,111 +360,207 @@ Panel {
           wrapMode: Text.Wrap
         }
 
-        // ---------- Container list ----------
+        // ---------- Container list (grouped by compose project) ----------
         Column {
           width: parent.width
-          spacing: Style.space(6)
+          spacing: Style.space(4)
           visible: root.daemonUp
 
           Repeater {
-            model: root.containers
+            model: root.projectGroups
 
-            Rectangle {
-              id: row
-              required property var modelData
-              required property int index
+            Column {
+              id: groupCol
               width: parent.width
-              height: Style.space(46)
-              radius: Style.space(6)
-              color: root.selectedIndex === row.index
-                ? Qt.rgba(1, 1, 1, 0.08)
-                : "transparent"
-              border.color: root.selectedIndex === row.index
-                ? Qt.rgba(1, 1, 1, 0.15)
-                : "transparent"
+              required property var modelData
+              property var group: modelData
+              readonly property bool isExpanded: root.expanded[group.project] === true
 
-              MouseArea {
-                anchors.fill: parent
-                onClicked: root.selectedIndex = row.index
-              }
-
+              // ---------- Group header (click to expand/collapse) ----------
               Item {
-                anchors.fill: parent
-                anchors.leftMargin: Style.space(10)
-                anchors.rightMargin: Style.space(8)
+                width: parent.width
+                implicitHeight: Math.max(chevron.implicitHeight, projectTitle.implicitHeight, groupCount.implicitHeight)
+
+                MouseArea {
+                  anchors.fill: parent
+                  onClicked: root.toggleGroup(groupCol.group.project)
+                }
 
                 Text {
-                  id: glyph
-                  text: Model.stateGlyph(row.modelData.state)
-                  color: Model.stateColor(row.modelData.state, row.modelData.unhealthy)
+                  id: chevron
+                  text: groupCol.isExpanded ? "▾" : "▸"
+                  color: Qt.darker(root.bar.foreground, 1.3)
                   font.family: root.bar.fontFamily
-                  font.pixelSize: Style.font.title
+                  font.pixelSize: Style.font.bodySmall
                   anchors.left: parent.left
+                  anchors.leftMargin: Style.space(4)
                   anchors.verticalCenter: parent.verticalCenter
                 }
 
-                Column {
-                  id: nameCol
-                  anchors.left: glyph.right
-                  anchors.leftMargin: Style.space(8)
-                  anchors.right: rowActions.left
-                  anchors.rightMargin: Style.space(8)
+                Text {
+                  id: projectTitle
+                  text: groupCol.group.project !== "" ? groupCol.group.project : "Other"
+                  color: root.bar.foreground
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                  anchors.left: chevron.right
+                  anchors.leftMargin: Style.space(6)
                   anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.space(1)
+                }
 
-                  Text {
-                    width: parent.width
-                    text: row.modelData.name
-                    color: root.bar.foreground
-                    font.family: root.bar.fontFamily
-                    font.pixelSize: Style.font.bodySmall
-                    font.bold: true
-                    elide: Text.ElideRight
-                  }
-
-                  Text {
-                    width: parent.width
-                    text: {
-                      var image = row.modelData.image
-                      if (row.modelData.cpuPct >= 0) {
-                        image += " · " + row.modelData.cpuPct.toFixed(1) + "% · " + row.modelData.memPct.toFixed(1) + "%"
-                      }
-                      if (row.modelData.unhealthy) image += " · unhealthy"
-                      return image
+                Text {
+                  id: groupCount
+                  text: {
+                    var running = 0
+                    for (var i = 0; i < groupCol.group.containers.length; i++) {
+                      if (groupCol.group.containers[i].state === "running") running++
                     }
-                    color: row.modelData.unhealthy ? Color.urgent : Qt.darker(root.bar.foreground, 1.4)
-                    font.family: root.bar.fontFamily
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
+                    return running + "/" + groupCol.group.containers.length
                   }
-                }
-
-                Row {
-                  id: rowActions
-                  spacing: Style.space(4)
-                  anchors.right: parent.right
+                  color: Qt.darker(root.bar.foreground, 1.3)
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.left: projectTitle.right
+                  anchors.leftMargin: Style.space(8)
                   anchors.verticalCenter: parent.verticalCenter
+                }
+              }
 
-                  readonly property var actions: [
-                    { label: "Start", cmd: "start", shown: row.modelData.state !== "running" },
-                    { label: "Stop", cmd: "stop", shown: row.modelData.state === "running" },
-                    { label: "Restart", cmd: "restart", shown: row.modelData.state === "running" }
-                  ]
+              // ---------- Container rows (visible only when expanded) ----------
+              Column {
+                width: parent.width
+                spacing: Style.space(6)
+                visible: groupCol.isExpanded
 
-                  Repeater {
-                    model: rowActions.actions
+                Repeater {
+                  model: groupCol.group.containers
 
-                    Button {
-                      required property var modelData
-                      text: modelData.label
-                      visible: modelData.shown
-                      fontSize: Style.font.caption
-                      foreground: root.bar.foreground
-                      fontFamily: root.bar.fontFamily
-                      horizontalPadding: Style.spacing.controlPaddingX
-                      verticalPadding: Style.spacing.controlPaddingY
-                      bordered: true
-                      onClicked: root.runAction(row.modelData.name, modelData.cmd)
+                  Rectangle {
+                    id: row
+                    required property var modelData
+                    readonly property int flatIndex: row.modelData.flatIndex
+                    readonly property bool isPending: root.pendingActionName !== "" && row.modelData.name === root.pendingActionName
+                    readonly property bool selected: root.selectedIndex === row.flatIndex
+                    onSelectedChanged: if (row.selected) root.ensureCursorVisible(row)
+                    width: parent.width
+                    height: Style.space(46)
+                    radius: Style.space(6)
+                    opacity: row.isPending ? 0.6 : 1.0
+                    color: row.selected
+                      ? Qt.rgba(1, 1, 1, 0.08)
+                      : "transparent"
+                    border.color: row.selected
+                      ? Qt.rgba(1, 1, 1, 0.15)
+                      : "transparent"
+
+                    MouseArea {
+                      anchors.fill: parent
+                      onClicked: root.selectedIndex = row.flatIndex
+                    }
+
+                    Item {
+                      anchors.fill: parent
+                      anchors.leftMargin: Style.space(10)
+                      anchors.rightMargin: Style.space(8)
+
+                      Text {
+                        id: glyph
+                        visible: !row.isPending
+                        text: Model.stateGlyph(row.modelData.state)
+                        color: Model.stateColor(row.modelData.state, row.modelData.unhealthy)
+                        font.family: root.bar.fontFamily
+                        font.pixelSize: Style.font.title
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                      }
+
+                      // In-flight action spinner (one action at a time).
+                      Text {
+                        id: spinner
+                        visible: row.isPending
+                        text: "󰂅"
+                        color: "#3b82f6"
+                        font.family: root.bar.fontFamily
+                        font.pixelSize: Style.font.title
+                        transformOrigin: Item.Center
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        RotationAnimation on rotation {
+                          from: 0
+                          to: 360
+                          duration: 900
+                          loops: Animation.Infinite
+                          running: spinner.visible
+                        }
+                      }
+
+                      Column {
+                        id: nameCol
+                        anchors.left: glyph.right
+                        anchors.leftMargin: Style.space(8)
+                        anchors.right: rowActions.left
+                        anchors.rightMargin: Style.space(8)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Style.space(1)
+
+                        Text {
+                          width: parent.width
+                          text: row.modelData.name
+                          color: root.bar.foreground
+                          font.family: root.bar.fontFamily
+                          font.pixelSize: Style.font.bodySmall
+                          font.bold: true
+                          elide: Text.ElideRight
+                        }
+
+                        Text {
+                          width: parent.width
+                          text: {
+                            var image = row.modelData.image
+                            if (row.modelData.cpuPct >= 0) {
+                              image += " · " + row.modelData.cpuPct.toFixed(1) + "% · " + row.modelData.memPct.toFixed(1) + "%"
+                            }
+                            if (row.modelData.unhealthy) image += " · unhealthy"
+                            return image
+                          }
+                          color: row.modelData.unhealthy ? Color.urgent : Qt.darker(root.bar.foreground, 1.4)
+                          font.family: root.bar.fontFamily
+                          font.pixelSize: Style.font.caption
+                          elide: Text.ElideRight
+                        }
+                      }
+
+                      Row {
+                        id: rowActions
+                        spacing: Style.space(4)
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: root.pendingActionName === "" ? 1.0 : 0.45
+
+                        readonly property var actions: [
+                          { label: "Start", cmd: "start", shown: row.modelData.state !== "running" },
+                          { label: "Stop", cmd: "stop", shown: row.modelData.state === "running" },
+                          { label: "Restart", cmd: "restart", shown: row.modelData.state === "running" }
+                        ]
+
+                        Repeater {
+                          model: rowActions.actions
+
+                          Button {
+                            required property var modelData
+                            text: modelData.label
+                            visible: modelData.shown && !row.isPending
+                            fontSize: Style.font.caption
+                            foreground: root.bar.foreground
+                            fontFamily: root.bar.fontFamily
+                            horizontalPadding: Style.spacing.controlPaddingX
+                            verticalPadding: Style.spacing.controlPaddingY
+                            bordered: true
+                            onClicked: root.runAction(row.modelData.name, modelData.cmd)
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -439,6 +596,7 @@ Panel {
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
         }
+      }
       }
     }
   }

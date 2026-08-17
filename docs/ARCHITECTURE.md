@@ -22,8 +22,10 @@ flowchart TB
 
 - `BarIconButton` (glyph `󰆳`) + status dot derived from the container
   states.
-- `KeyboardPanel` dropdown: container list with selection cursor,
-  per-row action buttons.
+- `KeyboardPanel` dropdown: containers **grouped by compose project** in a
+  collapsible accordion (collapsed by default, state kept per session) inside
+  a `ScrollView`; each row has a selection cursor, per-row action buttons and
+  an in-flight spinner while an action runs.
 - Owns the IPC target `pcrisho.container-admin` (`manageIpc: false`, same
   pattern as `pcrisho.power-admin`).
 - `Timer` poll (default 10s) + refresh on open + manual `r`/middle click.
@@ -32,11 +34,13 @@ flowchart TB
 
 Pure functions, no Qt dependencies — testable with `node`:
 
-- `parsePsLines(raw)` → containers: id, name, image, state, status (docker
-  line-per-object and podman array schemas).
+- `parsePsLines(raw)` → containers: id, name, image, state, status,
+  project (docker line-per-object and podman array schemas).
 - `parseStatsLines(raw)` → map name → { cpuPct, memPct } (docker string
   percents, podman snake_case strings and numeric variants).
 - `mergeStats(containers, stats)` → joins stats (running containers only).
+- `groupByProject(containers)` → compose-project groups (alphabetical,
+  ungrouped last) with a flatIndex on each container for the cursor.
 - `stateGlyph(state)` / `stateColor(state, unhealthy)` → UI mapping.
 - `worstState(containers)` / `runningCount(containers)` / `dotColor(worst)`
   → bar status dot + tooltip count.
@@ -68,9 +72,10 @@ Docker uses the `--format '{{json .}}'` line-per-object forms; podman uses
 `<runtime> start|stop|restart|pause|unpause <name>` — the runtime comes
 from the last snapshot's `==RUNTIME==` section, so an action always targets
 the engine the list was read from. Actions are serialized via the
-`actionBusy` flag (requests while busy are ignored); a non-zero exit sets a
-generic footer error (`lastError`) with the CLI's stderr and the list is
-re-refreshed. Per-row spinner / error details are planned for v1.1.
+`actionBusy` flag (requests while busy are ignored); while one is in flight
+the affected row shows a spinner and hides its buttons. A non-zero exit
+sets a footer error (`lastError`) with the CLI's stderr, and the list is
+re-refreshed. Per-row error details are planned for v1.1.
 
 ## Data flow for a toggle (example: restart)
 

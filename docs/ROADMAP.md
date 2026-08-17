@@ -13,6 +13,18 @@
 - [x] Live validation with real containers (loads clean, no QML errors; IPC
       state/refresh/action validated against real containers)
 
+## v1.3 (shipped)
+
+- [x] **Compose project grouping** — containers grouped in a collapsible
+  accordion (collapsed by default, expanded state kept per session;
+  ungrouped containers under "Other"); the panel scrolls when the list
+  exceeds its height and j/k skips collapsed groups
+- [x] **In-flight action indicator** — the affected row shows a spinner and
+  hides its buttons while an action runs (stop can take ~10s on a busy
+  container), cleared on exit
+- [x] Fix action stderr surfacing (`actionStderr` lives on the Process, not
+  the Panel — was silently never captured)
+
 ## v1.2 (shipped)
 
 - [x] **Podman support** — runtime auto-detection (`runtime` setting:
@@ -36,7 +48,6 @@
 
 ## Tier 3 (later)
 
-- [ ] Compose project grouping with collapsible headers
 - [ ] RAM limit slider (`docker update --memory --memory-swap -1`, devgtv
       pattern: pending-set queue + optimistic preview)
 - [ ] Search / filter by name or image

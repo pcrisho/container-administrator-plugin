@@ -9,10 +9,15 @@ pause / unpause actions from a dropdown panel.
 - **Bar icon** `󰆳` with a status dot: green = all running, yellow =
   paused/restarting/stopping, red = exited/dead/unhealthy, gray = runtime
   down. Tooltip shows the running count (e.g. `3/5 running`).
-- **Dropdown panel** (left click / right click on the icon): container list
-  with state glyphs, image, CPU% · mem%, and per-row action buttons.
+- **Dropdown panel** (left click / right click on the icon): containers
+  **grouped by compose project in a collapsible accordion** (collapsed by
+  default; click a header to expand/collapse, ungrouped containers go under
+  "Other"), with state glyphs, image, CPU% · mem%, and per-row action
+  buttons. The list scrolls when it exceeds the panel height.
 - **Actions**: Start, Stop, Restart (plus pause/unpause via
-  `omarchy-shell pcrisho.container-admin action <name> pause`).
+  `omarchy-shell pcrisho.container-admin action <name> pause`). While an
+  action is in flight the affected row shows a spinner (actions like stop
+  can take ~10s on a busy container).
 - **Daemon-down state**: when the container runtime is unreachable the
   panel says so — no silent empty list.
 - **Runtime auto-detection**: prefers Docker and falls back to Podman when

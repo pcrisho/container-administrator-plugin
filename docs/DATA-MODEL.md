@@ -31,8 +31,17 @@ One JSON object per line (not a JSON array):
 ```
 
 Fields used in v1: `ID`/`Id` (first 12 chars), `Names` (string in docker,
-array in podman), `Image`, `State`, `Status`, `Labels` (tier 3: compose
-project).
+array in podman), `Image`, `State`, `Status`, `Labels` (compose project).
+
+### Compose project
+
+`Labels` carries the compose project:
+- docker: a string `com.docker.compose.project=webapp,maintainer=me`
+  (values containing commas are quoted — `Model.js` handles that)
+- podman: an object `{ "com.docker.compose.project": "webapp" }`
+
+`Model.js` extracts it into the normalized `project` field; the UI groups
+containers by it (ungrouped containers land under "Other").
 
 ### CLI output differences
 
@@ -105,9 +114,10 @@ Per-row error details (exit code + stderr) are planned for v1.1.
       id: "abc123def456",        // 12-char short id
       name: "web",
       image: "nginx:latest",
-      state: "running",          // created|running|paused|restarting|exited|dead
+      state: "running",          // created|running|paused|restarting|stopping|exited|dead
       status: "Up 2 hours",
       unhealthy: false,          // derived from Status
+      project: "webapp",         // compose project from Labels, "" if none
       cpuPct: 1.23,              // from stats, -1 if not running
       memPct: 0.32               // from stats, -1 if not running
     }
