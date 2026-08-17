@@ -54,8 +54,8 @@ docker pause web
 docker unpause web
 ```
 
-Exit code ≠ 0 → surface an error on the row (`lastError`), keep the list
-refreshed.
+Exit code ≠ 0 → generic footer error (`lastError`); the list is re-refreshed.
+Per-row error details (exit code + stderr) are planned for v1.1.
 
 ## Normalized model (what the UI binds to)
 

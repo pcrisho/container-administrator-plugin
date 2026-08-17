@@ -9,8 +9,9 @@ Panel {
   id: root
   moduleName: "pcrisho.container-admin"
   ipcTarget: "pcrisho.container-admin"
-  // manageIpc: false so this panel can own the single IpcHandler the target
-  // permits — needed for the action/refresh methods below.
+  // manageIpc: false — the shell's default handler would occupy the single
+  // IpcHandler this target permits and only serve open/close; we declare
+  // our own below to also handle state/refresh/action.
   manageIpc: false
 
   property var containers: []
@@ -20,13 +21,15 @@ Panel {
   property string lastError: ""
   property int selectedIndex: 0
 
-  readonly property int pollIntervalSec: Model.clampPollInterval(setting("pollIntervalSec", 10), 10)
+  // Not readonly: the shell pushes settings updates live, so the poll
+  // interval must react to changes without a restart.
+  property int pollIntervalSec: Model.clampPollInterval(setting("pollIntervalSec", 10), 10)
   readonly property int runningTotal: Model.runningCount(root.containers)
   readonly property string worstDot: root.daemonUp ? Model.worstState(root.containers) : "none"
 
   // One Process per job; the snapshot script sections its output so a single
   // run yields the ps list, the stats map and daemon reachability.
-  var snapshotScript = [
+  readonly property string snapshotScript: [
     "echo '==PS=='",
     "docker ps -a --format '{{json .}}' 2>/dev/null",
     "echo '==STATS=='",
@@ -115,9 +118,18 @@ Panel {
 
   Process {
     id: actionProc
+    property string actionStderr: ""
+    // streamFinished always fires before exited (see Quickshell process.cpp),
+    // so actionStderr is populated when onExited runs.
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.actionStderr = String(text || "").trim()
+    }
     onExited: {
       root.actionBusy = false
-      if (exitCode !== 0) root.lastError = "docker command failed"
+      root.lastError = root.actionStderr !== ""
+        ? root.actionStderr
+        : (exitCode !== 0 ? "docker command failed" : "")
       root.refresh()
     }
   }
@@ -143,7 +155,7 @@ Panel {
       id: button
       anchors.fill: parent
       bar: root.bar
-      text: "󰡨"
+      text: "󰆳"
       slotSize: Style.bar.iconSlot
       tooltipText: {
         if (!root.daemonUp) return "Docker daemon unavailable"
@@ -153,6 +165,7 @@ Panel {
       }
       onPressed: function(b) {
         if (b === Qt.RightButton) root.open()
+        else if (b === Qt.MiddleButton) root.refresh()
         else root.toggle()
       }
     }

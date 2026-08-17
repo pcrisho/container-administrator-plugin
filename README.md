@@ -8,13 +8,13 @@ from a dropdown panel.
 
 ## Features
 
-- **Bar icon** `󰡨` with a status dot: green = all running, yellow =
+- **Bar icon** `󰆳` with a status dot: green = all running, yellow =
   paused/restarting, red = exited/dead/unhealthy, gray = daemon down.
   Tooltip shows the running count (e.g. `3/5 running`).
 - **Dropdown panel** (left click / right click on the icon): container list
   with state glyphs, image, CPU% · mem%, and per-row action buttons.
 - **Actions**: Start, Stop, Restart (plus pause/unpause via
-  `omarchy-shell ipc pcrisho.container-admin action <name> pause`).
+  `omarchy-shell pcrisho.container-admin action <name> pause`).
 - **Daemon-down state**: when `docker` is unreachable the panel says so —
   no silent empty list.
 - **Auto refresh**: on open + poll (default 10s, configurable 5–300s);
@@ -24,6 +24,7 @@ from a dropdown panel.
 
 - Omarchy 4.0.0+ (Quattro shell)
 - Docker CLI (`docker`) with the daemon running
+- `jq` (used by `install.sh` to verify the plugin was discovered)
 - Your user in the `docker` group (no sudo needed):
   `sudo usermod -aG docker $USER` + re-login
 
@@ -77,7 +78,7 @@ Target `pcrisho.container-admin`:
 Example:
 
 ```bash
-omarchy-shell ipc pcrisho.container-admin action web restart
+omarchy-shell pcrisho.container-admin action web restart
 ```
 
 ## Architecture

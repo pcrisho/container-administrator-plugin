@@ -10,7 +10,7 @@ desktop shell.
 
 ## UX (v1)
 
-- **Bar widget**: `BarIconButton` with the container glyph `󰡨` in the
+- **Bar widget**: `BarIconButton` with the container glyph `󰆳` in the
   right section of the bar.
   - A small status hint on the icon: a colored dot (green = all running,
     yellow = any paused/restarting, red = any exited/dead/unhealthy, gray =

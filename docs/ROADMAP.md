@@ -9,7 +9,9 @@
 - [x] Topbar dropdown UX: list, state glyphs/colors, keyboard, actions
 - [x] Actions: start / stop / restart / pause / unpause (serialized queue)
 - [x] Daemon-down state (no silent empty list)
-- [ ] Live validation with real containers
+- [x] Generic error surfacing (footer `lastError` on docker failure)
+- [x] Live validation with real containers (loads clean, no QML errors; IPC
+      state/refresh/action validated against real containers)
 
 ## v1.1 (planned)
 
@@ -17,7 +19,8 @@
 - [ ] Desktop notifications on state changes (stopped / unhealthy / started),
       with persistable "already notified" state
 - [ ] `showStoppedContainers`, `notificationsEnabled`, `logLines` settings
-- [ ] Error surfacing per row (exit code ≠ 0)
+- [ ] Per-row error details (exit code + stderr; generic footer error is
+      already in v1)
 
 ## Tier 3 (later)
 
@@ -43,6 +46,15 @@
 | 3 | Data layer: inline bash snapshot + pure JS parsers (node-testable) instead of a Python helper | ✅ |
 | 4 | Single `Process` per job (snapshot, actions) — serialized queue | ✅ |
 | 5 | Bars show a daemon state dot; dropdown holds the detail | ✅ |
+
+## Known upstream issues (shell, not this repo)
+
+- **Live plugin reload is unreliable**: after a failed QML compile, the
+  engine keeps serving the stale error for that file URL until the shell is
+  restarted (`omarchy restart shell`); files added to a plugin dir after
+  startup also fail with a misleading "File name case mismatch". Editing
+  `Panel.qml` during development therefore requires a shell restart to see
+  the change — the watcher log alone is not enough.
 
 ## Out of scope (indefinitely)
 
