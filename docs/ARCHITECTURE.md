@@ -44,12 +44,15 @@ Pure functions, no Qt dependencies — testable with `node`:
 ### 3. Data collection (inline snapshot script)
 
 One `Process` runs a snapshot (sectioned output — container names cannot
-contain `=`, so `==SECTION==` markers are unambiguous):
+contain `=`, so `==SECTION==` markers are unambiguous). `docker stats` is
+the expensive part (~2s) and is only run while the dropdown is open, where
+the percentages are visible; the poll timer and bar tooltip only need
+`ps` + daemon state:
 
 ```
-==PS==     docker ps -a --format '{{json .}}'
-==STATS==  docker stats --no-stream --format '{{json .}}'
-==DAEMON== docker info exit code (daemon reachability)
+==PS==     docker ps -a --format '{{json .}}'          (always)
+==STATS==  docker stats --no-stream --format '{{json .}}'  (only when panel open, $1 = "stats")
+==DAEMON== docker info exit code (daemon reachability) (always)
 ```
 
 ### 4. Actions (one Process at a time)

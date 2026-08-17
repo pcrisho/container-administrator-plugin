@@ -28,12 +28,16 @@ Panel {
   readonly property string worstDot: root.daemonUp ? Model.worstState(root.containers) : "none"
 
   // One Process per job; the snapshot script sections its output so a single
-  // run yields the ps list, the stats map and daemon reachability.
+  // run yields the ps list, the stats map and daemon reachability. The stats
+  // section runs only when $1 = "stats" (panel open): `docker stats` is the
+  // expensive part (~2s), and the bar icon/tooltip only need ps + daemon.
   readonly property string snapshotScript: [
     "echo '==PS=='",
     "docker ps -a --format '{{json .}}' 2>/dev/null",
-    "echo '==STATS=='",
-    "docker stats --no-stream --format '{{json .}}' 2>/dev/null",
+    "if [ \"$1\" = \"stats\" ]; then",
+    "  echo '==STATS=='",
+    "  docker stats --no-stream --format '{{json .}}' 2>/dev/null",
+    "fi",
     "echo '==DAEMON=='",
     "docker info >/dev/null 2>&1 && echo up || echo down"
   ].join("\n")
@@ -41,6 +45,10 @@ Panel {
   function refresh() {
     if (root.loading) return
     root.loading = true
+    // docker stats is only needed while the panel is open, where the
+    // CPU/mem percentages are actually visible. The leading "cap-snapshot"
+    // is the script's $0 (sh -c <script> <arg> binds the arg to $1).
+    snapshotProc.command = ["sh", "-c", root.snapshotScript, "cap-snapshot", root.opened ? "stats" : "bare"]
     if (!snapshotProc.running) snapshotProc.running = true
   }
 

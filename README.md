@@ -18,7 +18,8 @@ from a dropdown panel.
 - **Daemon-down state**: when `docker` is unreachable the panel says so —
   no silent empty list.
 - **Auto refresh**: on open + poll (default 10s, configurable 5–300s);
-  manual refresh with `r` or middle click.
+  manual refresh with `r` or middle click. `docker stats` (the expensive
+  part) runs only while the panel is open.
 
 ## Requirements
 
