@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "pcrisho.container-admin",
+  "name": "Container Administrator",
+  "version": "1.0.0",
+  "author": "pcrisho",
+  "license": "MIT",
+  "description": "Monitor and manage Docker containers from the topbar: status, live stats, and start/stop/restart actions.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Container Administrator",
+    "description": "Topbar dropdown with Docker container status, CPU/memory usage, and start/stop/restart actions.",
+    "category": "System",
+    "defaultSection": "right",
+    "allowMultiple": false,
+    "defaults": {
+      "pollIntervalSec": 10
+    },
+    "schema": [
+      {
+        "key": "pollIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 5,
+        "max": 300,
+        "step": 5,
+        "defaultValue": 10
+      }
+    ]
+  }
+}
