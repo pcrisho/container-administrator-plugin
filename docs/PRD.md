@@ -35,9 +35,9 @@ desktop shell.
 
 | Tier | Features | Status |
 |---|---|---|
-| **1 — Core (v1)** | Status + live stats (CPU/mem %), actions start/stop/restart/pause/unpause, daemon-down state, poll + manual refresh, dropdown UX, IPC | ✅ this release |
-| **2 — High value (v1.1)** | Log viewer per container, desktop notifications on state changes (stopped/unhealthy/started) | 📌 planned |
-| **3 — Roadmap** | Compose project grouping, RAM limit slider (`docker update`), search/filter, images/volumes/networks views, **Podman support** | 🔜 later |
+| **1 — Core (v1)** | Status + live stats (CPU/mem %), actions start/stop/restart/pause/unpause, daemon-down state, poll + manual refresh, dropdown UX, IPC | Shipped |
+| **2 — High value (v1.1)** | Log viewer per container, desktop notifications on state changes (stopped/unhealthy/started) | Planned |
+| **3 — Roadmap** | Compose project grouping, RAM limit slider (`docker update`), search/filter, images/volumes/networks views, **Podman support** | Later |
 
 ## Non-goals (v1)
 

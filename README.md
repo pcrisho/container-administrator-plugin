@@ -4,8 +4,6 @@ Omarchy topbar widget to monitor and manage **Docker** containers: status,
 live CPU/memory usage, and start / stop / restart / pause / unpause actions
 from a dropdown panel.
 
-![screenshot placeholder — run ./install.sh to see it live]
-
 ## Features
 
 - **Bar icon** `󰆳` with a status dot: green = all running, yellow =

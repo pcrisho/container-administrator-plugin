@@ -41,11 +41,11 @@
 
 | # | Decision | Status |
 |---|---|---|
-| 1 | Docker first, Podman after (user's active runtime is Docker) | ✅ |
-| 2 | v1 = core only (stats + actions); logs/notifications → v1.1 | ✅ |
-| 3 | Data layer: inline bash snapshot + pure JS parsers (node-testable) instead of a Python helper | ✅ |
-| 4 | Single `Process` per job (snapshot, actions) — serialized queue | ✅ |
-| 5 | Bars show a daemon state dot; dropdown holds the detail | ✅ |
+| 1 | Docker first, Podman after (user's active runtime is Docker) | Kept |
+| 2 | v1 = core only (stats + actions); logs/notifications → v1.1 | Kept |
+| 3 | Data layer: inline bash snapshot + pure JS parsers (node-testable) instead of a Python helper | Kept |
+| 4 | Single `Process` per job (snapshot, actions) — serialized queue | Kept |
+| 5 | Bars show a daemon state dot; dropdown holds the detail | Kept |
 
 ## Known upstream issues (shell, not this repo)
 
